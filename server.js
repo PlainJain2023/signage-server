@@ -105,17 +105,25 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
 });
 
 app.post('/api/display-now', (req, res) => {
-  const { imageUrl, rotation, mirror } = req.body;
+  const { imageUrl, rotation, mirror, duration } = req.body;
+  console.log('Display Now request received:', { imageUrl, rotation, mirror, duration });
+  
   if (!imageUrl) {
     return res.status(400).json({ error: 'Image URL required' });
   }
+  const now = new Date();
+  const displayDuration = duration || 60000; // Default 1 minute if not specified
+  
   currentContent = {
     type: 'image',
     url: imageUrl,
     rotation: rotation || 0,
     mirror: mirror || false,
-    displayedAt: new Date()
+    duration: displayDuration,
+    displayedAt: now,
+    clearAt: new Date(now.getTime() + displayDuration)
   };
+  console.log('Content will clear at:', currentContent.clearAt);
   console.log('Sending to displays:', currentContent);
   io.emit('display-content', currentContent);
   res.json({ success: true });
@@ -222,7 +230,8 @@ setInterval(() => {
         duration: schedule.duration,
         rotation: schedule.rotation || 0,
         mirror: schedule.mirror || false,
-        displayedAt: now
+        displayedAt: now,
+        clearAt: new Date(now.getTime() + schedule.duration) // Add clear time
       };
       io.emit('display-content', currentContent);
       
@@ -240,9 +249,16 @@ setInterval(() => {
       console.log('Displayed scheduled content:', schedule.id);
     }
   });
+  
+  // Check if current content duration has expired
+  if (currentContent && currentContent.clearAt && now >= new Date(currentContent.clearAt)) {
+    console.log('Content duration expired, clearing display');
+    currentContent = null;
+    io.emit('clear-content'); // Send clear signal to all displays
+  }
 }, 10000);
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log('Server running on port ' + PORT);
 });
