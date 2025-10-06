@@ -7,6 +7,8 @@ const cloudinary = require('cloudinary').v2;
 const streamifier = require('streamifier');
 const rateLimit = require('express-rate-limit');
 const { scheduleDb, uploadDb, displayDb, displayTrackingDb, currentDisplayDb, initializeDatabase } = require('./database');
+const { registerUser, loginUser, refreshAccessToken, getUserById } = require('./auth');
+const { authenticateToken, requireAdmin, optionalAuth } = require('./authMiddleware');
 require('dotenv').config();
 
 const app = express();
@@ -121,6 +123,98 @@ initializeDatabase()
     console.error('Failed to initialize database:', err);
     process.exit(1);
   });
+
+// ============================================
+// AUTHENTICATION ROUTES
+// ============================================
+
+// Register new user
+app.post('/api/auth/register', apiLimiter, async (req, res) => {
+  try {
+    const { email, password, name } = req.body;
+
+    // Validation
+    if (!email || !password || !name) {
+      return res.status(400).json({ error: 'Email, password, and name are required' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    // Register user
+    const result = await registerUser(email, password, name);
+
+    console.log('✅ User registered:', email);
+    res.status(201).json(result);
+  } catch (error) {
+    console.error('Registration failed:', error);
+    if (error.message === 'User already exists') {
+      return res.status(409).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Registration failed' });
+  }
+});
+
+// Login user
+app.post('/api/auth/login', apiLimiter, async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    const result = await loginUser(email, password);
+
+    console.log('✅ User logged in:', email);
+    res.json(result);
+  } catch (error) {
+    console.error('Login failed:', error);
+    res.status(401).json({ error: 'Invalid email or password' });
+  }
+});
+
+// Refresh access token
+app.post('/api/auth/refresh', async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(400).json({ error: 'Refresh token required' });
+    }
+
+    const result = await refreshAccessToken(refreshToken);
+    res.json(result);
+  } catch (error) {
+    console.error('Token refresh failed:', error);
+    res.status(401).json({ error: 'Invalid refresh token' });
+  }
+});
+
+// Get current user info
+app.get('/api/auth/me', authenticateToken, async (req, res) => {
+  try {
+    const user = await getUserById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json({ user });
+  } catch (error) {
+    console.error('Get user failed:', error);
+    res.status(500).json({ error: 'Failed to get user info' });
+  }
+});
+
+// Logout (client-side handles token removal, this is just for logging)
+app.post('/api/auth/logout', authenticateToken, (req, res) => {
+  console.log('👋 User logged out:', req.user.email);
+  res.json({ success: true, message: 'Logged out successfully' });
+});
+
+// ============================================
+// EXISTING ROUTES
+// ============================================
 
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);

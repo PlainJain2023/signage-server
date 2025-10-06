@@ -1,6 +1,24 @@
 -- Digital Signage Database Schema
 -- PostgreSQL 14+
 
+-- Table: users (PHASE 2.1 - User Authentication)
+-- Stores user accounts with authentication
+CREATE TABLE IF NOT EXISTS users (
+  id SERIAL PRIMARY KEY,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  name VARCHAR(100) NOT NULL,
+  role VARCHAR(20) DEFAULT 'user' CHECK (role IN ('admin', 'user')),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_login TIMESTAMP,
+  is_active BOOLEAN DEFAULT TRUE
+);
+
+-- Indexes for users
+CREATE INDEX IF NOT EXISTS idx_user_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_user_role ON users(role);
+
 -- Table: current_display
 -- Stores the currently active display content (singleton table)
 CREATE TABLE IF NOT EXISTS current_display (
@@ -95,7 +113,15 @@ BEFORE UPDATE ON schedules
 FOR EACH ROW
 EXECUTE FUNCTION update_updated_at_column();
 
+-- Trigger: Auto-update updated_at on users
+DROP TRIGGER IF EXISTS update_users_updated_at ON users;
+CREATE TRIGGER update_users_updated_at
+BEFORE UPDATE ON users
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
 -- Comments for documentation
+COMMENT ON TABLE users IS 'User accounts with authentication and authorization';
 COMMENT ON TABLE schedules IS 'Stores scheduled image displays with repeat options';
 COMMENT ON TABLE displays IS 'Tracks connected display devices';
 COMMENT ON TABLE upload_history IS 'Audit log of all image uploads';
