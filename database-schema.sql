@@ -28,12 +28,7 @@ CREATE TABLE IF NOT EXISTS schedules (
   mirror BOOLEAN DEFAULT FALSE,
   status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'cancelled')),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  
-  -- Indexes for performance
-  INDEX idx_scheduled_time (scheduled_time),
-  INDEX idx_status (status),
-  INDEX idx_created_at (created_at)
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Table: displays
@@ -44,10 +39,7 @@ CREATE TABLE IF NOT EXISTS displays (
   display_name VARCHAR(100) DEFAULT 'Display',
   status VARCHAR(20) DEFAULT 'online' CHECK (status IN ('online', 'offline')),
   last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  
-  INDEX idx_socket_id (socket_id),
-  INDEX idx_status (status)
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Table: upload_history
@@ -58,10 +50,7 @@ CREATE TABLE IF NOT EXISTS upload_history (
   image_id VARCHAR(200),
   file_size INTEGER,
   uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  ip_address VARCHAR(45),
-  
-  INDEX idx_uploaded_at (uploaded_at),
-  INDEX idx_ip_address (ip_address)
+  ip_address VARCHAR(45)
 );
 
 -- Table: display_history
@@ -73,11 +62,22 @@ CREATE TABLE IF NOT EXISTS display_history (
   duration INTEGER NOT NULL,
   rotation INTEGER DEFAULT 0,
   mirror BOOLEAN DEFAULT FALSE,
-  schedule_id INTEGER REFERENCES schedules(id) ON DELETE SET NULL,
-  
-  INDEX idx_displayed_at (displayed_at),
-  INDEX idx_schedule_id (schedule_id)
+  schedule_id INTEGER REFERENCES schedules(id) ON DELETE SET NULL
 );
+
+-- Indexes for performance (PostgreSQL syntax)
+CREATE INDEX IF NOT EXISTS idx_scheduled_time ON schedules(scheduled_time);
+CREATE INDEX IF NOT EXISTS idx_status ON schedules(status);
+CREATE INDEX IF NOT EXISTS idx_created_at ON schedules(created_at);
+
+CREATE INDEX IF NOT EXISTS idx_socket_id ON displays(socket_id);
+CREATE INDEX IF NOT EXISTS idx_display_status ON displays(status);
+
+CREATE INDEX IF NOT EXISTS idx_uploaded_at ON upload_history(uploaded_at);
+CREATE INDEX IF NOT EXISTS idx_ip_address ON upload_history(ip_address);
+
+CREATE INDEX IF NOT EXISTS idx_displayed_at ON display_history(displayed_at);
+CREATE INDEX IF NOT EXISTS idx_schedule_id ON display_history(schedule_id);
 
 -- Function: Update timestamp on row update
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -89,6 +89,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger: Auto-update updated_at on schedules
+DROP TRIGGER IF EXISTS update_schedules_updated_at ON schedules;
 CREATE TRIGGER update_schedules_updated_at
 BEFORE UPDATE ON schedules
 FOR EACH ROW
